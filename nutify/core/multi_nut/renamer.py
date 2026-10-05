@@ -32,6 +32,18 @@ _METRIC_DIMENSION_TOKENS = {
     'load',
     'temperature',
 }
+# Tokens that turn a live reading into a threshold/rating (battery.charge vs
+# battery.charge.low). A source may only fill a key with the same qualifiers,
+# otherwise the live value becomes its own threshold (charge <= charge_low).
+_METRIC_QUALIFIER_TOKENS = {
+    'low',
+    'high',
+    'warning',
+    'nominal',
+    'minimum',
+    'maximum',
+    'extended',
+}
 
 
 def _safe_float(value):
@@ -180,6 +192,9 @@ def _candidate_score(canonical_key: str, candidate_key: str) -> float:
     canonical_dimensions = set(canonical_tokens) & _METRIC_DIMENSION_TOKENS
     candidate_dimensions = set(candidate_tokens) & _METRIC_DIMENSION_TOKENS
     if canonical_dimensions and candidate_dimensions and canonical_dimensions != candidate_dimensions:
+        return 0.0
+
+    if (set(canonical_tokens) & _METRIC_QUALIFIER_TOKENS) != (set(candidate_tokens) & _METRIC_QUALIFIER_TOKENS):
         return 0.0
 
     shared_tokens = set(canonical_tokens) & set(candidate_tokens)
