@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -253,20 +254,34 @@ def suggest_mapping(
     existing_mapping: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     """Build canonical_key -> suggested source_key map."""
-    existing_mapping = existing_mapping or {}
-    available = sorted({str(item).strip() for item in available_source_keys if str(item).strip()})
+    available = tuple(sorted({str(item).strip() for item in available_source_keys if str(item).strip()}))
+    existing = tuple(sorted(
+        (str(key), str(value).strip())
+        for key, value in (existing_mapping or {}).items()
+        if value
+    ))
+    # Scoring every canonical key against every source is the bulk of each
+    # poll's CPU, yet the result only depends on these two inputs.
+    return dict(_suggest_mapping_cached(available, existing))
 
-    suggestions: Dict[str, str] = {}
+
+@functools.lru_cache(maxsize=64)
+def _suggest_mapping_cached(
+    available: Tuple[str, ...],
+    existing: Tuple[Tuple[str, str], ...],
+) -> Tuple[Tuple[str, str], ...]:
+    existing_mapping = dict(existing)
+    suggestions: List[Tuple[str, str]] = []
     for canonical_key in canonical_keys():
-        if canonical_key in existing_mapping and existing_mapping.get(canonical_key):
-            suggestions[canonical_key] = str(existing_mapping[canonical_key]).strip()
+        if canonical_key in existing_mapping:
+            suggestions.append((canonical_key, existing_mapping[canonical_key]))
             continue
 
         suggested = suggest_source_for_canonical(canonical_key, available)
         if suggested:
-            suggestions[canonical_key] = suggested
+            suggestions.append((canonical_key, suggested))
 
-    return suggestions
+    return tuple(suggestions)
 
 
 def build_source_list(raw_payload: Dict[str, object]) -> List[str]:
